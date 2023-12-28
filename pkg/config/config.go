@@ -11,13 +11,18 @@ type Credential struct {
 	Region          string `json:"region"`
 }
 
+type CronSpec struct {
+	Spec string `json:"spec"`
+}
+
 // Config exporter config
 type Config struct {
-	Credentials    map[string]Credential  `json:"credentials"`
+	Credentials map[string]Credential `json:"credentials"`
 	// todo: add extra labels
-	Labels        map[string]string    `json:"labels,omitempty"`
-	Metrics       map[string][]*Metric `json:"metrics"` // mapping for namespace and metrics
-	//InstanceInfos []string             `json:"instanceInfos"`
+	Labels  map[string]string    `json:"labels,omitempty"`
+	Metrics map[string][]*Metric `json:"metrics"` // mapping for namespace and metrics
+	// InstanceInfos []string             `json:"instanceInfos"`
+	Cron CronSpec `json:"cron"`
 }
 
 func (c *Config) SetDefaults() {

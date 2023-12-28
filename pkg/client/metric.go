@@ -1,25 +1,23 @@
 package client
 
 import (
+	"aliyun-exporter/pkg/cache"
+	"aliyun-exporter/pkg/config"
+	"aliyun-exporter/pkg/ratelimit"
 	"encoding/json"
-	"fmt"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/cms"
-	"github.com/IAOTW/aliyun-exporter/pkg/config"
-	"github.com/IAOTW/aliyun-exporter/pkg/ratelimit"
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
-	"github.com/prometheus/client_golang/prometheus"
-	"sort"
-	"time"
 )
 
-var ignores = map[string]struct{}{
-	"timestamp": {},
-	"Maximum":   {},
-	"Minimum":   {},
-	"Average":   {},
-}
+var lock sync.RWMutex
 
 // map for all avaliable namespaces
 // todo: is there a way to add desc into yaml file?
@@ -44,6 +42,8 @@ var allNamespaces = map[string]string{
 	"acs_mns_new":                    "queues of Message Service (MNS)",
 	"acs_kafka":                      "Message Queue for Apache Kafka",
 	"acs_amqp":                       "Alibaba Cloud Message Queue for AMQP instances",
+	"acs_alb":                        "Server Load Balancer (SLB)",
+	"acs_nlb":                        "Server Load Balancer (SLB)",
 }
 
 // AllNamespaces return allNamespaces
@@ -60,39 +60,6 @@ func allNamesOfNamespaces() []string {
 	return ss
 }
 
-// Datapoint datapoint
-type Datapoint map[string]interface{}
-
-// Get return value for measure
-func (d Datapoint) Get(measure string) float64 {
-	v, ok := d[measure]
-	if !ok {
-		return 0
-	}
-	return v.(float64)
-}
-
-// Labels return labels that not in ignores
-func (d Datapoint) Labels() []string {
-	labels := make([]string, 0)
-	for k := range d {
-		if _, ok := ignores[k]; !ok {
-			labels = append(labels, k)
-		}
-	}
-	sort.Strings(labels)
-	return labels
-}
-
-// Values return values for lables
-func (d Datapoint) Values(labels ...string) []string {
-	values := make([]string, 0, len(labels))
-	for i := range labels {
-		values = append(values, fmt.Sprintf("%s", d[labels[i]]))
-	}
-	return values
-}
-
 // MetricClient wrap cms.client
 type MetricClient struct {
 	cloudID string
@@ -106,7 +73,7 @@ func NewMetricClient(cloudID, ak, secret, region string, logger log.Logger) (*Me
 	if err != nil {
 		return nil, err
 	}
-	//cmsClient.SetTransport(rt)
+	// cmsClient.SetTransport(rt)
 	if logger == nil {
 		logger = log.NewNopLogger()
 	}
@@ -118,30 +85,43 @@ func (c *MetricClient) SetTransport(rate int) {
 	c.cms.SetTransport(rt)
 }
 
-// retrive get datapoints for metric
-func (c *MetricClient) retrive(sub string, name string, period string) ([]Datapoint, error) {
+func (c *MetricClient) createDescribeMetricLastReq(sub, name, period, nextToken string) (*cms.DescribeMetricLastResponse, error) {
 	req := cms.CreateDescribeMetricLastRequest()
 	req.ReadTimeout = 50 * time.Second
 	req.Namespace = sub
 	req.MetricName = name
 	req.Period = period
-	resp, err := c.cms.DescribeMetricLast(req)
+	req.NextToken = nextToken
+	return c.cms.DescribeMetricLast(req)
+}
+
+// retrive get datapoints for metric
+func (c *MetricClient) retrive(sub, name, period string) ([]cache.Datapoint, error) {
+	resp, err := c.createDescribeMetricLastReq(sub, name, period, "")
 	if err != nil {
+		level.Error(c.logger).Log("DescribeMetricLastReqErr", err)
 		return nil, err
 	}
 
-	var datapoints []Datapoint
+	for resp.NextToken != "" {
+		resp, err = c.createDescribeMetricLastReq(sub, name, period, resp.NextToken)
+		if err != nil {
+			level.Error(c.logger).Log("DescribeMetricLastReqErr", err)
+			return nil, err
+		}
+	}
+
+	var datapoints []cache.Datapoint
 	if err = json.Unmarshal([]byte(resp.Datapoints), &datapoints); err != nil {
 		// some execpected error
 		level.Debug(c.logger).Log("content", resp.GetHttpContentString(), "error", err)
 		return nil, err
 	}
-
 	return datapoints, nil
 }
 
-// Collect do collect metrics into channel
-func (c *MetricClient) Collect(namespace string, sub string, m *config.Metric, ch chan<- prometheus.Metric) {
+// GetMetrics get metrics into map
+func (c *MetricClient) GetMetrics(sub string, m *config.Metric) {
 	if m.Name == "" {
 		level.Warn(c.logger).Log("msg", "metric name must been set")
 		return
@@ -152,7 +132,34 @@ func (c *MetricClient) Collect(namespace string, sub string, m *config.Metric, c
 		level.Error(c.logger).Log("msg", "failed to retrive datapoints", "cloudID", c.cloudID, "namespace", sub, "name", m.String(), "error", err)
 		return
 	}
-	for _, dp := range datapoints {
+
+	lock.Lock()
+	defer lock.Unlock()
+	instanceKey := m.Dimensions[0]
+	for _, datapoint := range datapoints {
+		instanceID := datapoint[instanceKey].(string)
+		if _, ok := cache.MetricsTemp[instanceID]; !ok {
+			cache.MetricsTemp[instanceID] = make(map[string]cache.Datapoint)
+		}
+		if _, ok := cache.MetricsTemp[instanceID][m.Name]; !ok {
+			cache.MetricsTemp[instanceID][m.Name] = make(map[string]interface{})
+		}
+		cache.MetricsTemp[instanceID][m.Name]["timestamp"] = datapoint["timestamp"]
+		cache.MetricsTemp[instanceID][m.Name][instanceKey] = datapoint[instanceKey]
+		cache.MetricsTemp[instanceID][m.Name][m.Measure] = datapoint[m.Measure]
+	}
+}
+
+// Collect do collect metrics into channel
+func (c *MetricClient) Collect(namespace, sub, instanceID string, m *config.Metric, ch chan<- prometheus.Metric) {
+	if m.Name == "" {
+		level.Warn(c.logger).Log("msg", "metric name must been set")
+		return
+	}
+
+	sub = strings.Split(sub, "_")[1]
+	if metrics, ok := cache.Metrics[instanceID]; ok {
+		dp := metrics[m.Name]
 		val := dp.Get(m.Measure)
 		ch <- prometheus.MustNewConstMetric(
 			m.Desc(namespace, sub, dp.Labels()...),

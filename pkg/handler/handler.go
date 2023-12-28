@@ -1,16 +1,18 @@
 package handler
 
 import (
+	"aliyun-exporter/pkg/client"
+	"aliyun-exporter/pkg/collector"
+	"aliyun-exporter/pkg/config"
+
 	"fmt"
-	"github.com/IAOTW/aliyun-exporter/pkg/client"
-	"github.com/IAOTW/aliyun-exporter/pkg/collector"
-	"github.com/IAOTW/aliyun-exporter/pkg/config"
+	"net"
+	"net/http"
+
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"net"
-	"net/http"
 	"sigs.k8s.io/yaml"
 )
 
@@ -21,7 +23,7 @@ type Handler struct {
 }
 
 // New create http handler
-func New(addr string, logger log.Logger, rate int, cfg *config.Config, c map[string]prometheus.Collector) (*Handler, error) {
+func New(addr string, logger log.Logger, rate int, cfg *config.Config, c map[string]prometheus.Collector, mClient map[string]*client.MetricClient) (*Handler, error) {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		return nil, err
@@ -62,11 +64,8 @@ func New(addr string, logger log.Logger, rate int, cfg *config.Config, c map[str
             </body>
             </html>`))
 	})
-	http.HandleFunc("/monitors", func(w http.ResponseWriter, r *http.Request) {
-		handlerMonitors(w, r, logger, rate, cfg)
-	})
-	http.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
-		handlerMetrics(w, r, c)
+	http.HandleFunc("/metrics/exporter", func(w http.ResponseWriter, r *http.Request) {
+		handlerExporter(w, r, logger, rate, cfg, mClient)
 	})
 	http.HandleFunc("/config", func(w http.ResponseWriter, r *http.Request) {
 		c, err := yaml.Marshal(cfg)
@@ -83,65 +82,20 @@ func New(addr string, logger log.Logger, rate int, cfg *config.Config, c map[str
 	return h, nil
 }
 
-func handlerMetrics(w http.ResponseWriter, r *http.Request, c map[string]prometheus.Collector) {
-	registry := prometheus.NewRegistry()
-	for cloudId, _ := range c {
-		registry.MustRegister(c[cloudId])
-	}
-	h := promhttp.HandlerFor(registry, promhttp.HandlerOpts{})
-	h.ServeHTTP(w, r)
-}
-
-func handlerMonitors(w http.ResponseWriter, r *http.Request, logger log.Logger, rate int, cfg *config.Config) {
+func handlerExporter(w http.ResponseWriter, r *http.Request, logger log.Logger, rate int, cfg *config.Config, mClient map[string]*client.MetricClient) {
 	query := r.URL.Query()
-
-	cloudId := query.Get("tenantId")
-	if len(query["tenantId"]) != 1 || cloudId == "" {
-		http.Error(w, "'tenantId' parameter must be specified once", 400)
-		level.Error(logger).Log("'tenantId' parameter must be specified once")
+	target := query.Get("target")
+	if len(query["target"]) != 1 || target == "" {
+		http.Error(w, "'target' parameter must be specified once", 400)
+		level.Error(logger).Log("'target' parameter must be specified once")
 		return
 	}
 
-	accessKey := query.Get("accessKey")
-	if len(query["accessKey"]) != 1 || accessKey == "" {
-		http.Error(w, "'accessKey' parameter must only be specified once", 400)
-		level.Error(logger).Log("'accessKey' parameter must be specified once")
-		return
-	}
-
-	accessKeySecret := query.Get("accessKeySecret")
-	if len(query["accessKeySecret"]) != 1 || accessKeySecret == "" {
-		http.Error(w, "'accessKeySecret' parameter must only be specified once", 400)
-		level.Error(logger).Log("'accessKeySecret' parameter must be specified once")
-		return
-	}
-
-	regionId := query.Get("regionId")
-	if len(query["regionId"]) != 1 || regionId == "" {
-		http.Error(w, "'regionId' parameter must only be specified once", 400)
-		level.Error(logger).Log("'regionId' parameter must be specified once")
-		return
-	}
-	if cfg.Credentials == nil {
-		cfg.Credentials = make(map[string]config.Credential)
-	}
-	cfg.Credentials[cloudId] = config.Credential{
-		accessKey,
-		accessKeySecret,
-		regionId,
-	}
-	cfg.SetDefaults()
-	cli, err := client.NewMetricClient(cloudId, accessKey, accessKeySecret, regionId, logger)
-	if err != nil {
-		level.Debug(logger).Log("msg", "Client err", err)
-	}
-	c := collector.NewCloudMonitorCollectorFromURL(cli, cloudId, cfg, rate, logger)
+	c := collector.NewExporterCollector(mClient["tenantId1"], "tenantId1", target, cfg, rate, logger)
 	registry := prometheus.NewRegistry()
 	for i, _ := range c {
 		registry.MustRegister(c[i])
 	}
-
-	// Delegate http serving to Prometheus client library, which will call collector.Collect.
 	h := promhttp.HandlerFor(registry, promhttp.HandlerOpts{})
 	h.ServeHTTP(w, r)
 	return

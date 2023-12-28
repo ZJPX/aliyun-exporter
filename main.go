@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/IAOTW/aliyun-exporter/cmd"
+	"aliyun-exporter/cmd"
 )
 
 func main() {

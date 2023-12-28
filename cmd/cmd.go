@@ -1,15 +1,17 @@
 package cmd
 
 import (
+	"aliyun-exporter/pkg/client"
+	"aliyun-exporter/pkg/collector"
+	"aliyun-exporter/pkg/config"
+	job "aliyun-exporter/pkg/cron"
+	"aliyun-exporter/pkg/handler"
+	"aliyun-exporter/version"
 	"fmt"
-	"github.com/IAOTW/aliyun-exporter/pkg/client"
-	"github.com/IAOTW/aliyun-exporter/pkg/collector"
-	"github.com/IAOTW/aliyun-exporter/pkg/config"
-	"github.com/IAOTW/aliyun-exporter/pkg/handler"
-	"github.com/IAOTW/aliyun-exporter/version"
-	"github.com/spf13/cobra"
 	"os"
 	"text/tabwriter"
+
+	"github.com/spf13/cobra"
 )
 
 const AppName = "cloudmonitor"
@@ -43,11 +45,15 @@ func newServeMetricsCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			cms, err := collector.NewCloudMonitorCollector(AppName, cfg, o.rateLimit, logger)
+			cms, mClient, err := collector.NewCloudMonitorCollector(AppName, cfg, o.rateLimit, logger)
 			if err != nil {
 				return err
 			}
-			h, err := handler.New(o.so.listenAddress, logger, o.rateLimit, cfg, cms)
+			err = job.New(logger, o.rateLimit, cfg, mClient)
+			if err != nil {
+				return err
+			}
+			h, err := handler.New(o.so.listenAddress, logger, o.rateLimit, cfg, cms, mClient)
 			if err != nil {
 				return err
 			}

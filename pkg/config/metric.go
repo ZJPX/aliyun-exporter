@@ -55,14 +55,15 @@ func (m *Metric) String() string {
 
 // Desc to prometheus desc
 func (m *Metric) Desc(ns, sub string, dimensions ...string) *prometheus.Desc {
-	if len(m.Dimensions) == 0 {
-		m.Dimensions = dimensions
-	}
+	// if len(m.Dimensions) == 0 {
+	// 	m.Dimensions = dimensions
+	// }
+	var variableLabels []string
 	if m.desc == nil {
 		m.desc = prometheus.NewDesc(
-			strings.Join([]string{ns, sub, m.String()}, "_"),
+			strings.Join([]string{sub, m.String()}, "_"),
 			m.Description,
-			append(m.Dimensions, "cloudID"),
+			append(variableLabels, "instanceID", "cloudID"),
 			nil,
 		)
 	}

@@ -22,7 +22,7 @@ type options struct {
 
 func (o *options) AddFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&o.logFmt, "log.format", "logfmt", "Output format of log messages. One of: [logfmt, json]")
-	cmd.Flags().StringVar(&o.logLevel, "log.level", "info", "Log level")
+	cmd.Flags().StringVar(&o.logLevel, "log.level", "debug", "Log level")
 	cmd.Flags().StringVar(&o.logFile, "log.file", "aliyun-exporter.log", "Log message to file")
 	cmd.Flags().IntVar(&o.rateLimit, "rate-limit", 20, "RPS/request per second")
 	if o.so != nil {
