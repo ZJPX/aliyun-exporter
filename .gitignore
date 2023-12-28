@@ -30,4 +30,3 @@ vendor/
 *.log
 config-test.yaml
 .DS_Store
-config.yaml
