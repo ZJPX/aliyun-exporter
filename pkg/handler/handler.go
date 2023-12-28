@@ -13,7 +13,6 @@ import (
 	"github.com/go-kit/kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"sigs.k8s.io/yaml"
 )
 
 // Handler http metrics handler
@@ -34,50 +33,8 @@ func New(addr string, logger log.Logger, rate int, cfg *config.Config, c map[str
 			Addr: net.JoinHostPort(host, port),
 		},
 	}
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`<html>
-            <head>
-            <title>Aliyun Exporter</title>
-            <style>
-            label{
-            display:inline-block;
-            width:160px;
-            }
-            form label {
-            margin: 10px;
-            }
-            form input {
-            margin: 10px;
-            }
-            </style>
-            </head>
-            <body>
-            <h1>Aliyun Exporter</h1>
-            <form action="/monitors">
-            <label>tenantId:</label> <input type="text" name="tenantId" placeholder="" value="tenant001" style="width:210px" required><br>
-            <label>accessKey:</label> <input type="text" name="accessKey" placeholder="" value="" style="width:210px" required><br>
-            <label>accessKeySecret:</label> <input type="text" name="accessKeySecret" placeholder="" value="" style="width:210px" required><br>
-            <label>regionId:</label> <input type="text" name="regionId" placeholder="" value="cn-hangzhou" style="width:210px"><br>
-            <input type="submit" value="Submit">
-            </form>
-						<p><a href="/config">Config</a></p>
-            </body>
-            </html>`))
-	})
-	http.HandleFunc("/metrics/exporter", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/probe", func(w http.ResponseWriter, r *http.Request) {
 		handlerExporter(w, r, logger, rate, cfg, mClient)
-	})
-	http.HandleFunc("/config", func(w http.ResponseWriter, r *http.Request) {
-		c, err := yaml.Marshal(cfg)
-		if err != nil {
-			level.Error(logger).Log("msg", "Error marshaling configuration", "err", err)
-			http.Error(w, err.Error(), 500)
-			return
-		}
-		w.Write(c)
-	})
-	http.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Service is UP"))
 	})
 	return h, nil
 }
