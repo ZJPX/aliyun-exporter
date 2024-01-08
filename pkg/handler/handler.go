@@ -4,6 +4,7 @@ import (
 	"aliyun-exporter/pkg/client"
 	"aliyun-exporter/pkg/collector"
 	"aliyun-exporter/pkg/config"
+	"strings"
 
 	"fmt"
 	"net"
@@ -48,7 +49,8 @@ func handlerExporter(w http.ResponseWriter, r *http.Request, logger log.Logger, 
 		return
 	}
 
-	c := collector.NewExporterCollector(mClient["tenantId1"], "tenantId1", target, cfg, rate, logger)
+	str := strings.Split(target, ".")[0]
+	c := collector.NewExporterCollector(mClient["tenantId1"], "tenantId1", str, cfg, rate, logger)
 	registry := prometheus.NewRegistry()
 	for i, _ := range c {
 		registry.MustRegister(c[i])

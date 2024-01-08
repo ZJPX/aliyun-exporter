@@ -87,8 +87,8 @@ func (m *cloudMonitor) setNamespace(namespace string) bool {
 		name = "alb"
 	case "acs_nlb":
 		name = "nlb"
-	case "acs_slb_dashboard":
-		name = "lb"
+		// case "acs_slb_dashboard":
+		// 	name = "lb"
 	}
 	if name != strings.Split(m.instanceID, "-")[0] {
 		return false
