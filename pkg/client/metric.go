@@ -93,26 +93,31 @@ func (c *MetricClient) createDescribeMetricLastReq(sub, name, period, nextToken 
 
 // retrive get datapoints for metric
 func (c *MetricClient) retrive(sub, name, period string) ([]cache.Datapoint, error) {
-	resp, err := c.createDescribeMetricLastReq(sub, name, period, "")
-	if err != nil {
-		level.Error(c.logger).Log("DescribeMetricLastReqErr", err)
-		return nil, err
-	}
+	nextToken := ""
+	var datapoints []cache.Datapoint
 
-	for resp.NextToken != "" {
-		resp, err = c.createDescribeMetricLastReq(sub, name, period, resp.NextToken)
+	for {
+		resp, err := c.createDescribeMetricLastReq(sub, name, period, nextToken)
 		if err != nil {
 			level.Error(c.logger).Log("DescribeMetricLastReqErr", err)
 			return nil, err
 		}
+
+		var ds []cache.Datapoint
+		if err = json.Unmarshal([]byte(resp.Datapoints), &ds); err != nil {
+			level.Debug(c.logger).Log("content", resp.GetHttpContentString(), "error", err)
+			return nil, err
+		}
+
+		datapoints = append(datapoints, ds...)
+
+		if resp.NextToken == "" {
+			break
+		}
+
+		nextToken = resp.NextToken
 	}
 
-	var datapoints []cache.Datapoint
-	if err = json.Unmarshal([]byte(resp.Datapoints), &datapoints); err != nil {
-		// some execpected error
-		level.Debug(c.logger).Log("content", resp.GetHttpContentString(), "error", err)
-		return nil, err
-	}
 	return datapoints, nil
 }
 
