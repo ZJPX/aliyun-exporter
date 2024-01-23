@@ -5,16 +5,13 @@ import (
 	"aliyun-exporter/pkg/config"
 	"aliyun-exporter/pkg/ratelimit"
 	"encoding/json"
-	"strings"
 	"sync"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
-
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/cms"
-	"github.com/go-kit/kit/log"
-	"github.com/go-kit/kit/log/level"
+	"github.com/go-kit/log"
+	"github.com/go-kit/log/level"
 )
 
 var lock sync.RWMutex
@@ -73,7 +70,6 @@ func NewMetricClient(cloudID, ak, secret, region string, logger log.Logger) (*Me
 	if err != nil {
 		return nil, err
 	}
-	// cmsClient.SetTransport(rt)
 	if logger == nil {
 		logger = log.NewNopLogger()
 	}
@@ -145,28 +141,7 @@ func (c *MetricClient) GetMetrics(sub string, m *config.Metric) {
 			cache.MetricsTemp[instanceID][m.Name] = make(map[string]interface{})
 		}
 		cache.MetricsTemp[instanceID][m.Name]["timestamp"] = datapoint["timestamp"]
-		cache.MetricsTemp[instanceID][m.Name][instanceKey] = datapoint[instanceKey]
 		cache.MetricsTemp[instanceID][m.Name][m.Measure] = datapoint[m.Measure]
-	}
-}
-
-// Collect do collect metrics into channel
-func (c *MetricClient) Collect(namespace, sub, instanceID string, m *config.Metric, ch chan<- prometheus.Metric) {
-	if m.Name == "" {
-		level.Warn(c.logger).Log("msg", "metric name must been set")
-		return
-	}
-
-	sub = strings.Split(sub, "_")[1]
-	if metrics, ok := cache.Metrics[instanceID]; ok {
-		dp := metrics[m.Name]
-		val := dp.Get(m.Measure)
-		ch <- prometheus.MustNewConstMetric(
-			m.Desc(namespace, sub, dp.Labels()...),
-			prometheus.GaugeValue,
-			val,
-			append(dp.Values(m.Dimensions...), c.cloudID)...,
-		)
 	}
 }
 

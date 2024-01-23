@@ -30,3 +30,5 @@ vendor/
 *.log
 config-test.yaml
 .DS_Store
+
+aliyun-exporter
