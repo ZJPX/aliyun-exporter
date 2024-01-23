@@ -22,8 +22,8 @@ func (m *CloudMonitor) Collect(ch chan<- prometheus.Metric) {
 		if !m.checkNamespace(namespace) {
 			continue
 		}
+		namespace = strings.Split(namespace, "_")[1]
 		for _, metric := range metrics {
-			namespace = strings.Split(namespace, "_")[1]
 			if ims, ok := cache.Metrics[m.InstanceID]; ok {
 				dp := ims[metric.Name]
 				val := dp.Get(metric.Measure)
