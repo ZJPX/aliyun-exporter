@@ -5,16 +5,13 @@ import (
 	"aliyun-exporter/pkg/config"
 	"aliyun-exporter/pkg/ratelimit"
 	"encoding/json"
-	"strings"
 	"sync"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
-
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/cms"
-	"github.com/go-kit/kit/log"
-	"github.com/go-kit/kit/log/level"
+	"github.com/go-kit/log"
+	"github.com/go-kit/log/level"
 )
 
 var lock sync.RWMutex
@@ -73,7 +70,6 @@ func NewMetricClient(cloudID, ak, secret, region string, logger log.Logger) (*Me
 	if err != nil {
 		return nil, err
 	}
-	// cmsClient.SetTransport(rt)
 	if logger == nil {
 		logger = log.NewNopLogger()
 	}
@@ -97,26 +93,31 @@ func (c *MetricClient) createDescribeMetricLastReq(sub, name, period, nextToken 
 
 // retrive get datapoints for metric
 func (c *MetricClient) retrive(sub, name, period string) ([]cache.Datapoint, error) {
-	resp, err := c.createDescribeMetricLastReq(sub, name, period, "")
-	if err != nil {
-		level.Error(c.logger).Log("DescribeMetricLastReqErr", err)
-		return nil, err
-	}
+	nextToken := ""
+	var datapoints []cache.Datapoint
 
-	for resp.NextToken != "" {
-		resp, err = c.createDescribeMetricLastReq(sub, name, period, resp.NextToken)
+	for {
+		resp, err := c.createDescribeMetricLastReq(sub, name, period, nextToken)
 		if err != nil {
 			level.Error(c.logger).Log("DescribeMetricLastReqErr", err)
 			return nil, err
 		}
+
+		var ds []cache.Datapoint
+		if err = json.Unmarshal([]byte(resp.Datapoints), &ds); err != nil {
+			level.Debug(c.logger).Log("content", resp.GetHttpContentString(), "error", err)
+			return nil, err
+		}
+
+		datapoints = append(datapoints, ds...)
+
+		if resp.NextToken == "" {
+			break
+		}
+
+		nextToken = resp.NextToken
 	}
 
-	var datapoints []cache.Datapoint
-	if err = json.Unmarshal([]byte(resp.Datapoints), &datapoints); err != nil {
-		// some execpected error
-		level.Debug(c.logger).Log("content", resp.GetHttpContentString(), "error", err)
-		return nil, err
-	}
 	return datapoints, nil
 }
 
@@ -145,28 +146,7 @@ func (c *MetricClient) GetMetrics(sub string, m *config.Metric) {
 			cache.MetricsTemp[instanceID][m.Name] = make(map[string]interface{})
 		}
 		cache.MetricsTemp[instanceID][m.Name]["timestamp"] = datapoint["timestamp"]
-		cache.MetricsTemp[instanceID][m.Name][instanceKey] = datapoint[instanceKey]
 		cache.MetricsTemp[instanceID][m.Name][m.Measure] = datapoint[m.Measure]
-	}
-}
-
-// Collect do collect metrics into channel
-func (c *MetricClient) Collect(namespace, sub, instanceID string, m *config.Metric, ch chan<- prometheus.Metric) {
-	if m.Name == "" {
-		level.Warn(c.logger).Log("msg", "metric name must been set")
-		return
-	}
-
-	sub = strings.Split(sub, "_")[1]
-	if metrics, ok := cache.Metrics[instanceID]; ok {
-		dp := metrics[m.Name]
-		val := dp.Get(m.Measure)
-		ch <- prometheus.MustNewConstMetric(
-			m.Desc(namespace, sub, dp.Labels()...),
-			prometheus.GaugeValue,
-			val,
-			append(dp.Values(m.Dimensions...), c.cloudID)...,
-		)
 	}
 }
 

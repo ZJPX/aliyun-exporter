@@ -1,23 +1,25 @@
 package cmd
 
 import (
-	"github.com/go-kit/kit/log"
-	"github.com/go-kit/kit/log/level"
-	"github.com/spf13/cobra"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/go-kit/log"
+	"github.com/go-kit/log/level"
+	"github.com/spf13/cobra"
 )
 
 var logger log.Logger
 
 // options command line options
 type options struct {
-	logFmt    string
-	logLevel  string
-	logFile   string
-	rateLimit int
-	so        *serveOption
+	logFmt        string
+	logLevel      string
+	logFile       string
+	rateLimit     int
+	configFile    string
+	listenAddress string
 }
 
 func (o *options) AddFlags(cmd *cobra.Command) {
@@ -25,9 +27,8 @@ func (o *options) AddFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&o.logLevel, "log.level", "debug", "Log level")
 	cmd.Flags().StringVar(&o.logFile, "log.file", "aliyun-exporter.log", "Log message to file")
 	cmd.Flags().IntVar(&o.rateLimit, "rate-limit", 20, "RPS/request per second")
-	if o.so != nil {
-		o.so.AddFlags(cmd)
-	}
+	cmd.Flags().StringVarP(&o.configFile, "config", "c", "config.yaml", "Path of config file")
+	cmd.Flags().StringVar(&o.listenAddress, "web.listen-address", ":9527", "Address on which to expose metrics and web interface.")
 }
 
 // Complete do some initialization
@@ -67,24 +68,5 @@ func (o *options) Complete() error {
 		lvlOp = level.AllowInfo()
 	}
 	logger = level.NewFilter(logger, lvlOp)
-	if o.so != nil {
-		if err := o.so.Complete(); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-type serveOption struct {
-	configFile    string
-	listenAddress string
-}
-
-func (o *serveOption) AddFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVarP(&o.configFile, "config", "c", "config.yaml", "Path of config file")
-	cmd.Flags().StringVar(&o.listenAddress, "web.listen-address", ":9527", "Address on which to expose metrics and web interface.")
-}
-
-func (o *serveOption) Complete() error {
 	return nil
 }

@@ -1,15 +1,16 @@
 package cmd
 
 import (
-	"aliyun-exporter/pkg/client"
-	"aliyun-exporter/pkg/collector"
-	"aliyun-exporter/pkg/config"
-	job "aliyun-exporter/pkg/cron"
-	"aliyun-exporter/pkg/handler"
-	"aliyun-exporter/version"
 	"fmt"
+	"net/http"
 	"os"
 	"text/tabwriter"
+
+	"aliyun-exporter/pkg/client"
+	"aliyun-exporter/pkg/config"
+	"aliyun-exporter/pkg/cron"
+	"aliyun-exporter/pkg/handler"
+	"aliyun-exporter/version"
 
 	"github.com/spf13/cobra"
 )
@@ -31,36 +32,29 @@ func NewRootCommand() *cobra.Command {
 }
 
 func newServeMetricsCommand() *cobra.Command {
-	o := &options{
-		so: &serveOption{},
-	}
+	opt := &options{}
 	cmd := &cobra.Command{
 		Use:   "serve",
 		Short: "Serve HTTP metrics handler",
 		PreRunE: func(_ *cobra.Command, _ []string) error {
-			return o.Complete()
+			return opt.Complete()
 		},
 		RunE: func(_ *cobra.Command, _ []string) error {
-			cfg, err := config.Parse(o.so.configFile)
+			cfg, err := config.Parse(opt.configFile)
 			if err != nil {
 				return err
 			}
-			cms, mClient, err := collector.NewCloudMonitorCollector(AppName, cfg, o.rateLimit, logger)
+
+			err = cron.New(logger, cfg)
 			if err != nil {
 				return err
 			}
-			err = job.New(logger, o.rateLimit, cfg, mClient)
-			if err != nil {
-				return err
-			}
-			h, err := handler.New(o.so.listenAddress, logger, o.rateLimit, cfg, cms, mClient)
-			if err != nil {
-				return err
-			}
-			return h.Run()
+
+			handler.RegisterHandler(cfg.Metrics)
+			return http.ListenAndServe(opt.listenAddress, nil)
 		},
 	}
-	o.AddFlags(cmd)
+	opt.AddFlags(cmd)
 	return cmd
 }
 
