@@ -23,7 +23,8 @@ type Config struct {
 	Labels  map[string]string    `json:"labels,omitempty"`
 	Metrics map[string][]*Metric `json:"metrics"` // mapping for namespace and metrics
 	// InstanceInfos []string             `json:"instanceInfos"`
-	Cron CronSpec `json:"cron"`
+	Cron      CronSpec `json:"cron"`
+	RateLimit int      `json:"rate_limit"`
 }
 
 func (c *Config) SetDefaults() {

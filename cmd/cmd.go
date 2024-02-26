@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"aliyun-exporter/pkg/handler"
 	"fmt"
 	"net/http"
 	"os"
@@ -9,7 +10,6 @@ import (
 	"aliyun-exporter/pkg/client"
 	"aliyun-exporter/pkg/config"
 	"aliyun-exporter/pkg/cron"
-	"aliyun-exporter/pkg/handler"
 	"aliyun-exporter/version"
 
 	"github.com/spf13/cobra"
@@ -44,13 +44,13 @@ func newServeMetricsCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-
-			err = cron.New(logger, cfg)
+			fmt.Println(opt.cloud)
+			err = cron.New(logger, cfg, opt.cloud)
 			if err != nil {
 				return err
 			}
 
-			handler.RegisterHandler(cfg.Metrics)
+			handler.RegisterHandler(cfg.Metrics, opt.cloud)
 			return http.ListenAndServe(opt.listenAddress, nil)
 		},
 	}

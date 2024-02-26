@@ -20,6 +20,7 @@ type options struct {
 	rateLimit     int
 	configFile    string
 	listenAddress string
+	cloud         []string
 }
 
 func (o *options) AddFlags(cmd *cobra.Command) {
@@ -29,6 +30,7 @@ func (o *options) AddFlags(cmd *cobra.Command) {
 	cmd.Flags().IntVar(&o.rateLimit, "rate-limit", 20, "RPS/request per second")
 	cmd.Flags().StringVarP(&o.configFile, "config", "c", "config.yaml", "Path of config file")
 	cmd.Flags().StringVar(&o.listenAddress, "web.listen-address", ":9527", "Address on which to expose metrics and web interface.")
+	cmd.Flags().StringSliceVar(&o.cloud, "cloud", []string{}, "Cloud vendors.")
 }
 
 // Complete do some initialization

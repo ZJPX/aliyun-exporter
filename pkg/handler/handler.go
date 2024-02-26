@@ -11,7 +11,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-func RegisterHandler(metrics map[string][]*config.Metric) {
+func RegisterHandler(metrics map[string][]*config.Metric, cloudType []string) {
 	http.HandleFunc("/probe", func(w http.ResponseWriter, r *http.Request) {
 		target := r.URL.Query().Get("target")
 		if target == "" {
@@ -22,6 +22,7 @@ func RegisterHandler(metrics map[string][]*config.Metric) {
 		target = strings.Split(target, ".")[0]
 
 		c := &collector.CloudMonitor{
+			CloudType:  cloudType,
 			InstanceID: target,
 			Metrics:    metrics,
 		}

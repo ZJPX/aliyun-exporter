@@ -8,8 +8,9 @@ import (
 // Datapoint datapoint
 type Datapoint map[string]interface{}
 
-var Metrics map[string]map[string]Datapoint
+var Metrics map[string]map[string]map[string]Datapoint
 var MetricsTemp map[string]map[string]Datapoint
+var TcMetricsTemp map[string]map[string]Datapoint
 
 var ignores = map[string]struct{}{
 	"timestamp": {},

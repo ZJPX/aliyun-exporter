@@ -64,18 +64,6 @@ type MetricClient struct {
 	logger  log.Logger
 }
 
-// NewMetricClient create metric Client
-func NewMetricClient(cloudID, ak, secret, region string, logger log.Logger) (*MetricClient, error) {
-	cmsClient, err := cms.NewClientWithAccessKey(region, ak, secret)
-	if err != nil {
-		return nil, err
-	}
-	if logger == nil {
-		logger = log.NewNopLogger()
-	}
-	return &MetricClient{cloudID, cmsClient, logger}, nil
-}
-
 func (c *MetricClient) SetTransport(rate int) {
 	rt := ratelimit.New(rate)
 	c.cms.SetTransport(rt)
