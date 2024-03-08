@@ -10,7 +10,7 @@ import (
 )
 
 type CloudMonitor struct {
-	CloudType  []string
+	Cloud      string
 	InstanceID string
 	Metrics    map[string][]*config.Metric
 }
@@ -19,26 +19,26 @@ func (m *CloudMonitor) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (m *CloudMonitor) Collect(ch chan<- prometheus.Metric) {
-	for i := 0; i < len(m.CloudType); i++ {
-		for namespace, metrics := range m.Metrics {
-			if !m.checkNamespace(namespace) {
-				continue
-			}
-			namespace = m.checkCloudType(m.CloudType[i], namespace)
-			// namespace = strings.Split(namespace, "_")[1]
-			for _, metric := range metrics {
-				if ims, ok := cache.Metrics[m.CloudType[i]][m.InstanceID]; ok {
-					dp := ims[metric.Name]
-					val := dp.Get(metric.Measure)
-					ch <- prometheus.MustNewConstMetric(
-						metric.Desc(namespace),
-						prometheus.GaugeValue,
-						val,
-					)
-				}
+	for namespace, metrics := range m.Metrics {
+		if !m.checkNamespace(namespace) {
+			continue
+		}
+		if m.Cloud == "aliyun" {
+			namespace = strings.Split(namespace, "_")[1]
+		}
+		for _, metric := range metrics {
+			if ims, ok := cache.Metrics[m.Cloud][m.InstanceID]; ok {
+				dp := ims[metric.Name]
+				val := dp.Get(metric.Measure)
+				ch <- prometheus.MustNewConstMetric(
+					metric.Desc(namespace),
+					prometheus.GaugeValue,
+					val,
+				)
 			}
 		}
 	}
+
 }
 
 func (m *CloudMonitor) checkNamespace(namespace string) bool {
@@ -55,14 +55,4 @@ func (m *CloudMonitor) checkNamespace(namespace string) bool {
 		return false
 	}
 	return true
-}
-
-func (m *CloudMonitor) checkCloudType(cloudType, name string) string {
-	switch cloudType {
-	case "aliyun":
-		name = strings.Split(name, "_")[1]
-	case "qcloud":
-	}
-
-	return name
 }

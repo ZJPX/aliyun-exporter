@@ -10,6 +10,7 @@ type Credential struct {
 	AccessKey       string `json:"accessKey"`
 	AccessKeySecret string `json:"accessKeySecret"`
 	Region          string `json:"region"`
+	Cloud           string `json:"cloud"`
 }
 
 type CronSpec struct {

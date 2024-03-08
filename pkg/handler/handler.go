@@ -19,10 +19,15 @@ func RegisterHandler(metrics map[string][]*config.Metric, cloudType []string) {
 			return
 		}
 
-		target = strings.Split(target, ".")[0]
+		for i := 0; i < len(cloudType); i++ {
+			if cloudType[i] == "aliyun" {
+				target = strings.Split(target, ".")[0]
+			}
+		}
 
+		cloud := checkCloudType(target)
 		c := &collector.CloudMonitor{
-			CloudType:  cloudType,
+			Cloud:      cloud,
 			InstanceID: target,
 			Metrics:    metrics,
 		}
@@ -32,4 +37,20 @@ func RegisterHandler(metrics map[string][]*config.Metric, cloudType []string) {
 		h := promhttp.HandlerFor(registry, promhttp.HandlerOpts{})
 		h.ServeHTTP(w, r)
 	})
+}
+
+func checkCloudType(target string) string {
+	var cloud string
+
+	name := strings.Split(target, "-")[0]
+
+	switch name {
+	case "alb":
+		cloud = "aliyun"
+	case "nlb":
+		cloud = "aliyun"
+	case "lb":
+		cloud = "qcloud"
+	}
+	return cloud
 }

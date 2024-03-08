@@ -71,31 +71,70 @@ func aliYunMetric(logger log.Logger, cfg *config.Config, c *cron.Cron, cloudType
 	return
 }
 
-func qCloudMetric(logger log.Logger, cfg *config.Config, c *cron.Cron, cloudType string) (err error) {
-	credential := cfg.Credentials["tenantId2"]
-	cred := common.NewCredential(
-		credential.AccessKey,
-		credential.AccessKeySecret,
-	)
-	instanceRepo, err := client.NewTcClbClient(cred, "tenantId2", credential.Region, logger)
-	if err != nil {
-		return
-	}
-	monitorRepo, err := client.NewTcMonitorClient(cred, "tenantId2", credential.Region, cfg.RateLimit, logger)
-	if err != nil {
-		return
+func qCloudMetric(logger log.Logger, cfg *config.Config, c *cron.Cron, cloudType string) error {
+	repo := make(map[string]collectRepo)
+	for cloudID, credential := range cfg.Credentials {
+		if credential.Cloud != "qcloud" {
+			continue
+		}
+		fmt.Printf("Region: %s\n", credential.Region)
+
+		cred := common.NewCredential(
+			credential.AccessKey,
+			credential.AccessKeySecret,
+		)
+		instanceRepo, err := client.NewTcClbClient(cred, cloudID, credential.Region, logger)
+		if err != nil {
+			return err
+		}
+		monitorRepo, err := client.NewTcMonitorClient(cred, cloudID, credential.Region, cfg.RateLimit, logger)
+		if err != nil {
+			return err
+		}
+
+		repo[credential.Region] = collectRepo{
+			instanceRepo: instanceRepo,
+			monitorRepo:  monitorRepo,
+		}
 	}
 
 	tcm := qCloudMonitor{
-		cloudType:    cloudType,
-		metrics:      cfg.Metrics,
-		instanceRepo: instanceRepo,
-		monitorRepo:  monitorRepo,
+		cloudType: cloudType,
+		metrics:   cfg.Metrics,
+		repos:     repo,
+		// instanceRepo: instanceRepo,
+		// monitorRepo:  monitorRepo,
 	}
 
-	_, err = c.AddFunc(cfg.Cron.Spec, tcm.collect)
+	_, err := c.AddFunc(cfg.Cron.Spec, tcm.collect)
 	if err != nil {
-		return
+		return err
 	}
-	return
+
+	// credential := cfg.Credentials["tenantId2"]
+	// cred := common.NewCredential(
+	// 	credential.AccessKey,
+	// 	credential.AccessKeySecret,
+	// )
+	// instanceRepo, err := client.NewTcClbClient(cred, "tenantId2", credential.Region, logger)
+	// if err != nil {
+	// 	return
+	// }
+	// monitorRepo, err := client.NewTcMonitorClient(cred, "tenantId2", credential.Region, cfg.RateLimit, logger)
+	// if err != nil {
+	// 	return
+	// }
+	//
+	// tcm := qCloudMonitor{
+	// 	cloudType:    cloudType,
+	// 	metrics:      cfg.Metrics,
+	// 	instanceRepo: instanceRepo,
+	// 	monitorRepo:  monitorRepo,
+	// }
+	//
+	// _, err = c.AddFunc(cfg.Cron.Spec, tcm.collect)
+	// if err != nil {
+	// 	return
+	// }
+	return nil
 }
