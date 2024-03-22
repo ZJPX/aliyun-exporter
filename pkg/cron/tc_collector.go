@@ -38,7 +38,8 @@ func (c *qCloudMonitor) collect() {
 
 	cache.TcMetricsTemp = make(map[string]map[string]cache.Datapoint)
 
-	for region, repo := range c.repos {
+	for region := range c.repos {
+		repo := c.repos[region]
 		insList, err := repo.instanceRepo.ListByFilters()
 		// insList, err := c.repos[region].instanceRepo.ListByFilters()
 		if err != nil {
@@ -52,19 +53,16 @@ func (c *qCloudMonitor) collect() {
 				continue
 			}
 
-			for _, m := range metrics {
+			for k := range metrics {
 				wg.Add(1)
 				go func(tcNamespace string, insList []client.TcInstance, metric *config.Metric) {
 					defer wg.Done()
-					err = repo.monitorRepo.GetMetrics(tcNamespace, insList, metric, st, 0)
-					if err != nil {
-						panic(err)
-					}
-				}(tcNamespace, insList, m)
+					repo.monitorRepo.GetMetrics(tcNamespace, insList, metric, st, 0)
+				}(tcNamespace, insList, metrics[k])
 			}
 		}
+		wg.Wait()
 	}
-	wg.Wait()
 
 	if _, ok := cache.Metrics[c.cloudType]; !ok {
 		cache.Metrics[c.cloudType] = make(map[string]map[string]cache.Datapoint)

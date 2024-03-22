@@ -77,7 +77,7 @@ func newMonitorClient(credential common.CredentialIface,
 		TLSHandshakeTimeout:   30 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 	}
-	clientProfile.HttpProfile.ReqTimeout = 5
+	clientProfile.HttpProfile.ReqTimeout = 30
 	client.Init(region).
 		WithCredential(credential).
 		WithProfile(clientProfile).WithHttpTransport(transport)
